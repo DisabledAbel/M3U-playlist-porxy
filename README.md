@@ -56,9 +56,10 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 Pull requests and suggestions are welcome! Please open an issue first if you have a feature request.
 
 ——
-[![Join our Discord](https://discord.gg/QwegeeJ8Mc)
+Have questions, need help, or want to share your setup?Join our Discord community here:👉 https://discord.gg/QwegeeJ8Mc
 
----
+—-
+
 
 ## 📄 License
 
