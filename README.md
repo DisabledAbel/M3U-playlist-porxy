@@ -16,25 +16,11 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 - 🧹 Filter or modify channels (rename, remove, or reorder)
 - 🔄 Auto-refresh support for remote playlists
 - 🔒 Optional IP whitelisting or token auth
-- 📦 Lightweight and easy to deploy (Python/Node/etc.)
-
----
-
-## 📥 Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/your-username/m3u-playlist-proxy.git
-cd m3u-playlist-proxy
-```
-
-Install dependencies (adjust if it's Node, Python
+- 📦 Lightweight and easy to deploy (Python/Node/e
 
 ---
 
 ## 🛠️ Customization
-***Coming soon***
 
 - Modify channel names
 - Filter groups
@@ -42,6 +28,12 @@ Install dependencies (adjust if it's Node, Python
 - Add EPG links
 
 ---
+
+# 📥 Installation
+
+> 🚧 **Installation instructions coming soon!**\
+> Stay tuned — setup will be super simple 
+
 
 ## 📚 What is M3U?
 
