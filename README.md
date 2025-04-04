@@ -56,7 +56,7 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 Pull requests and suggestions are welcome! Please open an issue first if you have a feature request.
 
 ——
-[![Join our Discord](https://img.shields.io/discord/your-server-id?color=5865F2&label=discord&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/QwegeeJ8Mc)
+[![Join our Discord](https://discord.gg/QwegeeJ8Mc)
 
 ---
 
