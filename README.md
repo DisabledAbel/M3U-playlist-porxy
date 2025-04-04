@@ -35,7 +35,6 @@ Install dependencies (adjust if it's Node, Python
 
 ## 🛠️ Customization
 ***Coming soon***
-You can customize the playlist logic in `proxy.py` (or similar file):
 
 - Modify channel names
 - Filter groups
@@ -55,7 +54,8 @@ You can customize the playlist logic in `proxy.py` (or similar file):
 - [ ] Web interface for managing playlists
 - [ ] Caching support
 - [ ] EPG auto-merging
-- [ ] Docker image
+- [ ] Setup backup streams
+- [ ] Transcoding
 
 ---
 
