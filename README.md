@@ -1,8 +1,3 @@
-# M3U-playlist-porxy
-Sure! Here's a clean and informative `README.md` for a GitHub project called **M3U Playlist Proxy** — assuming it's a tool for serving or modifying M3U playlists through a proxy server. You can edit the sections based on your exact features.
-
----
-
 
 # 🎧 M3U Playlist Proxy
 
