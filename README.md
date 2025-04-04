@@ -3,7 +3,7 @@ Sure! Here's a clean and informative `README.md` for a GitHub project called **M
 
 ---
 
-```markdown
+
 # 🎧 M3U Playlist Proxy
 
 A lightweight proxy server for streaming and modifying M3U playlists on the fly. Perfect for IPTV users who want to filter, clean, or host their playlists with ease.
