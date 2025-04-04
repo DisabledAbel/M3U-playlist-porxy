@@ -63,9 +63,4 @@ Have questions, need help, or want to share your setup?Join our Discord communit
 
 ## 📄 License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
-
-```
-
-Let me know your language (Python/Node/etc.), and I can tailor this even better!
+MIT License. See [LICENSE](LICENSE)
