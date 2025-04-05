@@ -41,8 +41,6 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 - [ ] Web interface for managing playlists
 - [ ] Caching support
 - [ ] EPG auto-merging
-[ ] Transcoding
-
 ---
 
 ## 🧑‍💻 Contributing
