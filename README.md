@@ -11,7 +11,7 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 - 🧹 Filter or modify channels (rename, remove, or reorder)
 - 🔄 Auto-refresh support for remote playlists
 - 🔒 Optional IP whitelisting or token auth
-- 📦 Lightweight and easy to deploy (Python/Node/e
+- 📦 Lightweight and easy to deploy
 
 ---
 
@@ -41,8 +41,7 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 - [ ] Web interface for managing playlists
 - [ ] Caching support
 - [ ] EPG auto-merging
-- [ ] Setup backup streams
-- [ ] Transcoding
+[ ] Transcoding
 
 ---
 
