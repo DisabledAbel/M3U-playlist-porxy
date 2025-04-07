@@ -26,7 +26,7 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 
 # 📥 Installation
 
-[![Install GitHub App](https://img.shields.io/badge/Install%20GitHub%20App-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/apps/m3u-playlist-proxy)
+Coming soon 
 
 
 
