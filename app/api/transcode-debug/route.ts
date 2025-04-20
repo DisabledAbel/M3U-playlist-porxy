@@ -1,4 +1,9 @@
 import type { NextRequest } from "next/server"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+// Convert exec to a promise-based function
+const execPromise = promisify(exec)
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get("url")
@@ -11,18 +16,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Check if ffmpeg is available
+    // Check if ffmpeg is available using ES module compatible approach
     let ffmpegAvailable = false
     try {
-      const { spawn } = require("child_process")
-      const ffmpegCheck = spawn("ffmpeg", ["-version"])
-      await new Promise((resolve, reject) => {
-        ffmpegCheck.on("error", reject)
-        ffmpegCheck.on("close", (code: number) => {
-          if (code === 0) resolve(true)
-          else reject(new Error(`FFmpeg exited with code ${code}`))
-        })
-      })
+      // Use exec instead of spawn to check for ffmpeg
+      await execPromise("ffmpeg -version")
       ffmpegAvailable = true
     } catch (error) {
       console.error("FFmpeg not available:", error)
@@ -68,4 +66,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
