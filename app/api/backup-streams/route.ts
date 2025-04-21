@@ -12,9 +12,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log(`Retrieving backup streams for channel hash: ${channelId}`)
+    console.log(`Retrieving backup streams for channel ID: ${channelId}`)
 
-    // No decoding needed - we're using the hash directly
+    // No validation needed - we accept any channel ID format now
     const backupStreams = backupStreamsStore[channelId] || []
     return Response.json({ backupStreams })
   } catch (error) {
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Store the backup streams using the hash as the key
+    // Store the backup streams using the channel ID as the key
     backupStreamsStore[channelId] = validStreams.map((stream: any, index: number) => ({
       url: stream.url,
       priority: stream.priority || index + 1,

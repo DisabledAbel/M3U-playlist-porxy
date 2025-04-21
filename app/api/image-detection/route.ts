@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log(`Retrieving image detection settings for channel hash: ${channelId}`)
+    console.log(`Retrieving image detection settings for channel ID: ${channelId}`)
 
-    // No decoding needed - we're using the hash directly
+    // No validation needed - we accept any channel ID format now
     const settings = imageDetectionStore[channelId] || {
       enabled: false,
       similarityThreshold: 85,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       checkInterval: Math.min(Math.max(Number(settings.checkInterval) || 10, 5), 60),
     }
 
-    // Store the settings using the hash as the key
+    // Store the settings using the channel ID as the key
     imageDetectionStore[channelId] = validatedSettings
 
     // Return the updated store for debugging

@@ -47,38 +47,31 @@ interface ImageDetectionConfig {
   checkInterval: number
 }
 
-// Ultra-safe channel ID function that only produces alphanumeric characters
-const createChannelHash = (str: string): string => {
+// Map to store channel ID mappings
+const channelIdMap = new Map<string, string>()
+
+// Extremely simple channel ID function that just uses sequential numbers
+// This ensures maximum compatibility and avoids any pattern matching issues
+const getChannelId = (originalId: string): string => {
   try {
-    // First, ensure we have a string
-    if (typeof str !== "string" || !str) {
-      console.warn("Invalid value passed to createChannelHash:", str)
-      return "invalid" + Date.now().toString(36)
+    // Check if we already have a mapping for this channel
+    if (channelIdMap.has(originalId)) {
+      return channelIdMap.get(originalId)!
     }
 
-    // Create a simple numeric hash
-    let hash = 0
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i)
-      hash = (hash << 5) - hash + char
-      hash = hash & hash // Convert to 32bit integer
-    }
+    // Create a new sequential ID
+    const newId = `channel${channelIdMap.size + 1}`
 
-    // Convert to alphanumeric only (base 36) and ensure it's positive
-    const hashStr = Math.abs(hash).toString(36)
+    // Store the mapping
+    channelIdMap.set(originalId, newId)
 
-    // Ensure we only have alphanumeric characters (a-z, 0-9)
-    const safeHash = hashStr.replace(/[^a-z0-9]/g, "")
-
-    // Add a prefix to ensure it's never empty and always starts with a letter
-    const finalHash = "ch" + safeHash
-
-    console.log(`Created hash for channel "${str}": ${finalHash}`)
-    return finalHash
+    console.log(`Created channel ID mapping: "${originalId}" -> "${newId}"`)
+    return newId
   } catch (error) {
-    console.error("Error creating hash:", error)
-    // Fallback to a timestamp-based ID with a prefix
-    return "fallback" + Date.now().toString(36)
+    console.error("Error creating channel ID:", error)
+    // Fallback to a timestamp-based ID
+    const fallbackId = `channel${Date.now()}`
+    return fallbackId
   }
 }
 
@@ -321,11 +314,11 @@ export default function Home() {
             if (!channel.id) return // Skip channels without IDs
 
             try {
-              // Use the hash function for the channel ID
-              const channelHash = createChannelHash(channel.id)
-              console.log(`Loading backup streams for "${channel.name}", hash: ${channelHash}`)
+              // Get a simple channel ID
+              const simpleId = getChannelId(channel.id)
+              console.log(`Loading backup streams for "${channel.name}" (ID: ${channel.id}), simple ID: ${simpleId}`)
 
-              const response = await fetch(`/api/backup-streams?channelId=${channelHash}`)
+              const response = await fetch(`/api/backup-streams?channelId=${encodeURIComponent(simpleId)}`)
 
               if (response.ok) {
                 const data = await response.json()
@@ -376,11 +369,11 @@ export default function Home() {
             if (!channel.id) return
 
             try {
-              // Use the hash function for the channel ID
-              const channelHash = createChannelHash(channel.id)
-              console.log(`Loading image detection for "${channel.name}", hash: ${channelHash}`)
+              // Get a simple channel ID
+              const simpleId = getChannelId(channel.id)
+              console.log(`Loading image detection for "${channel.name}" (ID: ${channel.id}), simple ID: ${simpleId}`)
 
-              const response = await fetch(`/api/image-detection?channelId=${channelHash}`)
+              const response = await fetch(`/api/image-detection?channelId=${encodeURIComponent(simpleId)}`)
 
               if (response.ok) {
                 const data = await response.json()
@@ -564,9 +557,9 @@ export default function Home() {
     try {
       console.log(`Saving backup streams for channel: ${selectedChannel.name} (ID: ${selectedChannel.id})`)
 
-      // Use the hash function for the channel ID
-      const channelHash = createChannelHash(selectedChannel.id)
-      console.log(`Using channel hash: ${channelHash}`)
+      // Get a simple channel ID
+      const simpleId = getChannelId(selectedChannel.id)
+      console.log(`Using simple ID: ${simpleId}`)
 
       // Save to the server
       const response = await fetch("/api/backup-streams", {
@@ -575,7 +568,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          channelId: channelHash,
+          channelId: simpleId,
           originalId: selectedChannel.id, // Store the original ID for reference
           streams: streams.map((s) => ({ url: s.url, priority: s.priority })),
         }),
@@ -616,9 +609,9 @@ export default function Home() {
     if (!channelId) return
 
     try {
-      // Use the hash function for the channel ID
-      const channelHash = createChannelHash(channelId)
-      console.log(`Saving image detection settings for channel hash: ${channelHash}`)
+      // Get a simple channel ID
+      const simpleId = getChannelId(channelId)
+      console.log(`Saving image detection settings for simple ID: ${simpleId}`)
 
       const response = await fetch("/api/image-detection", {
         method: "POST",
@@ -626,7 +619,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          channelId: channelHash,
+          channelId: simpleId,
           originalId: channelId, // Store the original ID for reference
           settings,
         }),
