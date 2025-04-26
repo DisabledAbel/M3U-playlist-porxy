@@ -31,13 +31,14 @@ interface Group {
 }
 
 interface Channel {
-  id: string
+  id: string // This will be our synthetic ID (e.g., "channel_1")
   name: string
   extinf: string
   url: string
   group?: string
   tvgId?: string
   logo?: string
+  originalId?: string // Original ID from the M3U file
 }
 
 interface ImageDetectionConfig {
@@ -45,34 +46,6 @@ interface ImageDetectionConfig {
   referenceImageUrl?: string
   similarityThreshold: number
   checkInterval: number
-}
-
-// Map to store channel ID mappings
-const channelIdMap = new Map<string, string>()
-
-// Extremely simple channel ID function that just uses sequential numbers
-// This ensures maximum compatibility and avoids any pattern matching issues
-const getChannelId = (originalId: string): string => {
-  try {
-    // Check if we already have a mapping for this channel
-    if (channelIdMap.has(originalId)) {
-      return channelIdMap.get(originalId)!
-    }
-
-    // Create a new sequential ID
-    const newId = `channel${channelIdMap.size + 1}`
-
-    // Store the mapping
-    channelIdMap.set(originalId, newId)
-
-    console.log(`Created channel ID mapping: "${originalId}" -> "${newId}"`)
-    return newId
-  } catch (error) {
-    console.error("Error creating channel ID:", error)
-    // Fallback to a timestamp-based ID
-    const fallbackId = `channel${Date.now()}`
-    return fallbackId
-  }
 }
 
 export default function Home() {
@@ -218,7 +191,7 @@ export default function Home() {
     }
   }
 
-  // Update the fetchChannels function to include retry logic
+  // Completely revised fetchChannels function with robust ID generation
   const fetchChannels = async () => {
     if (!url) return
 
@@ -267,10 +240,16 @@ export default function Home() {
 
       if (data.channels && Array.isArray(data.channels)) {
         // Use the channels directly from the improved endpoint
+        // Generate completely synthetic IDs that don't depend on the original data
+        let channelCounter = 1
         const extractedChannels: Channel[] = data.channels
           .map((channel: any) => {
+            // Generate a safe, sequential ID for each channel
+            const safeId = `channel_${channelCounter++}`
+
             return {
-              id: channel.id,
+              id: safeId, // Use our own safe ID
+              originalId: channel.id, // Store the original ID for reference
               name: channel.name || "Unknown Channel",
               extinf: channel.info || "",
               url: channel.url || "",
@@ -279,7 +258,7 @@ export default function Home() {
               logo: sanitizeImageUrl(channel.logo),
             }
           })
-          .filter((channel: Channel) => channel.id && channel.url)
+          .filter((channel: Channel) => channel.url) // Only include channels with a URL
 
         setChannels(extractedChannels)
         console.log(`Loaded ${extractedChannels.length} channels for backup stream management`)
@@ -298,10 +277,10 @@ export default function Home() {
     }
   }
 
-  // Update the loadAllBackupStreams function with more robust error handling
+  // Completely revised loadAllBackupStreams function with robust error handling
   const loadAllBackupStreams = async () => {
     try {
-      // For each channel, fetch its backup streams
+      console.log("Starting to load backup streams for all channels...")
       const allBackups: Record<string, BackupStream[]> = {}
 
       // Process channels in batches to avoid too many simultaneous requests
@@ -309,37 +288,60 @@ export default function Home() {
       for (let i = 0; i < channels.length; i += batchSize) {
         const batch = channels.slice(i, i + batchSize)
 
-        await Promise.all(
+        // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
+        const results = await Promise.allSettled(
           batch.map(async (channel) => {
-            if (!channel.id) return // Skip channels without IDs
+            if (!channel.id) return null // Skip channels without IDs
 
             try {
-              // Get a simple channel ID
-              const simpleId = getChannelId(channel.id)
-              console.log(`Loading backup streams for "${channel.name}" (ID: ${channel.id}), simple ID: ${simpleId}`)
+              console.log(`Loading backup streams for "${channel.name}" (ID: ${channel.id})`)
 
-              const response = await fetch(`/api/backup-streams?channelId=${encodeURIComponent(simpleId)}`)
+              // Make the API request with the channel ID
+              try {
+                // Use a simple string concatenation approach with proper encoding
+                const apiUrl = `/api/backup-streams?channelId=${encodeURIComponent(channel.id)}`
+                console.log(`Fetching from URL: ${apiUrl}`)
 
-              if (response.ok) {
-                const data = await response.json()
-                if (data.backupStreams && data.backupStreams.length > 0) {
-                  allBackups[channel.id] = data.backupStreams.map((stream: any) => ({
-                    id: Math.random().toString(36).substring(2, 9),
-                    url: stream.url,
-                    priority: stream.priority,
-                  }))
+                const response = await fetch(apiUrl)
+
+                if (response.ok) {
+                  const data = await response.json()
+                  if (data.backupStreams && Array.isArray(data.backupStreams)) {
+                    return {
+                      channelId: channel.id,
+                      streams: data.backupStreams.map((stream: any) => ({
+                        id: Math.random().toString(36).substring(2, 9),
+                        url: stream.url,
+                        priority: stream.priority,
+                      })),
+                    }
+                  }
+                } else {
+                  console.warn(
+                    `Failed to load backup streams for ${channel.name}: ${response.status} ${response.statusText}`,
+                  )
                 }
-              } else {
-                console.warn(
-                  `Failed to load backup streams for ${channel.name}: ${response.status} ${response.statusText}`,
-                )
+              } catch (fetchError) {
+                console.error(`Fetch error for channel ${channel.name}:`, fetchError)
               }
-            } catch (channelError) {
-              console.error(`Error loading backup streams for channel ${channel.name}:`, channelError)
-              // Continue with other channels even if one fails
+            } catch (error) {
+              console.error(`Error loading backup streams for channel ${channel.name}:`, error)
             }
+            return null
           }),
         )
+
+        // Process successful results
+        results.forEach((result) => {
+          if (result.status === "fulfilled" && result.value) {
+            allBackups[result.value.channelId] = result.value.streams
+          }
+        })
+
+        // Add a small delay between batches to avoid overwhelming the server
+        if (i + batchSize < channels.length) {
+          await delay(300)
+        }
       }
 
       setBackupStreams(allBackups)
@@ -354,43 +356,67 @@ export default function Home() {
     }
   }
 
-  // Update the loadImageDetectionSettings function with more robust error handling
+  // Completely revised loadImageDetectionSettings function with robust error handling
   const loadImageDetectionSettings = async () => {
     try {
-      // Process channels in batches to avoid too many simultaneous requests
-      const batchSize = 5
+      console.log("Starting to load image detection settings for all channels...")
       const allSettings: Record<string, ImageDetectionConfig> = {}
 
+      // Process channels in batches to avoid too many simultaneous requests
+      const batchSize = 5
       for (let i = 0; i < channels.length; i += batchSize) {
         const batch = channels.slice(i, i + batchSize)
 
-        await Promise.all(
+        // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
+        const results = await Promise.allSettled(
           batch.map(async (channel) => {
-            if (!channel.id) return
+            if (!channel.id) return null
 
             try {
-              // Get a simple channel ID
-              const simpleId = getChannelId(channel.id)
-              console.log(`Loading image detection for "${channel.name}" (ID: ${channel.id}), simple ID: ${simpleId}`)
+              console.log(`Loading image detection for "${channel.name}" (ID: ${channel.id})`)
 
-              const response = await fetch(`/api/image-detection?channelId=${encodeURIComponent(simpleId)}`)
+              // Make the API request with the channel ID
+              try {
+                // Use a simple string concatenation approach with proper encoding
+                const apiUrl = `/api/image-detection?channelId=${encodeURIComponent(channel.id)}`
+                console.log(`Fetching from URL: ${apiUrl}`)
 
-              if (response.ok) {
-                const data = await response.json()
-                if (data.settings) {
-                  allSettings[channel.id] = data.settings
+                const response = await fetch(apiUrl)
+
+                if (response.ok) {
+                  const data = await response.json()
+                  if (data.settings) {
+                    return {
+                      channelId: channel.id,
+                      settings: data.settings,
+                    }
+                  }
+                } else {
+                  console.warn(
+                    `Failed to load image detection settings for ${channel.name}: ${response.status} ${response.statusText}`,
+                  )
                 }
-              } else {
-                console.warn(
-                  `Failed to load image detection settings for ${channel.name}: ${response.status} ${response.statusText}`,
-                )
+              } catch (fetchError) {
+                console.error(`Fetch error for channel ${channel.name}:`, fetchError)
               }
             } catch (error) {
-              console.error(`Error loading image detection settings for ${channel.name}:`, error)
-              // Continue with other channels even if one fails
+              console.error(`Error loading image detection settings for channel ${channel.name}:`, error)
             }
+            return null
           }),
         )
+
+        // Process successful results
+        results.forEach((result) => {
+          if (result.status === "fulfilled" && result.value) {
+            allSettings[result.value.channelId] = result.value.settings
+          }
+        })
+
+        // Add a small delay between batches to avoid overwhelming the server
+        if (i + batchSize < channels.length) {
+          await delay(300)
+        }
       }
 
       setImageDetectionSettings(allSettings)
@@ -550,49 +576,50 @@ export default function Home() {
     }
   }
 
-  // Update the saveBackupStreams function with more robust error handling
+  // Update the saveBackupStreams function to use the channel ID directly
   const saveBackupStreams = async (streams: BackupStream[]) => {
     if (!selectedChannel) return
 
     try {
       console.log(`Saving backup streams for channel: ${selectedChannel.name} (ID: ${selectedChannel.id})`)
 
-      // Get a simple channel ID
-      const simpleId = getChannelId(selectedChannel.id)
-      console.log(`Using simple ID: ${simpleId}`)
+      // Save to the server using the channel ID directly
+      try {
+        const response = await fetch("/api/backup-streams", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            channelId: selectedChannel.id,
+            originalId: selectedChannel.originalId, // Store the original ID for reference
+            streams: streams.map((s) => ({ url: s.url, priority: s.priority })),
+          }),
+        })
 
-      // Save to the server
-      const response = await fetch("/api/backup-streams", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channelId: simpleId,
-          originalId: selectedChannel.id, // Store the original ID for reference
-          streams: streams.map((s) => ({ url: s.url, priority: s.priority })),
-        }),
-      })
+        const data = await response.json()
 
-      const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to save backup streams")
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save backup streams")
+        console.log("Server response:", data)
+
+        // Update local state
+        setBackupStreams({
+          ...backupStreams,
+          [selectedChannel.id]: streams,
+        })
+
+        setBackupDialogOpen(false)
+        toast({
+          title: "Backup Streams Saved",
+          description: `${streams.length} backup streams saved for ${selectedChannel.name}`,
+        })
+      } catch (fetchError) {
+        console.error("Fetch error when saving backup streams:", fetchError)
+        throw new Error(`Network error: ${fetchError.message}`)
       }
-
-      console.log("Server response:", data)
-
-      // Update local state
-      setBackupStreams({
-        ...backupStreams,
-        [selectedChannel.id]: streams,
-      })
-
-      setBackupDialogOpen(false)
-      toast({
-        title: "Backup Streams Saved",
-        description: `${streams.length} backup streams saved for ${selectedChannel.name}`,
-      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error("Error saving backup streams:", error)
@@ -604,45 +631,47 @@ export default function Home() {
     }
   }
 
-  // Update the saveImageDetectionSettings function with more robust error handling
+  // Update the saveImageDetectionSettings function to use the channel ID directly
   const saveImageDetectionSettings = async (channelId: string, settings: ImageDetectionConfig) => {
     if (!channelId) return
 
     try {
-      // Get a simple channel ID
-      const simpleId = getChannelId(channelId)
-      console.log(`Saving image detection settings for simple ID: ${simpleId}`)
+      console.log(`Saving image detection settings for channel ID: ${channelId}`)
 
-      const response = await fetch("/api/image-detection", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channelId: simpleId,
-          originalId: channelId, // Store the original ID for reference
-          settings,
-        }),
-      })
+      try {
+        const response = await fetch("/api/image-detection", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            channelId: channelId,
+            settings,
+          }),
+        })
 
-      const data = await response.json()
+        const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save image detection settings")
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to save image detection settings")
+        }
+
+        // Update local state
+        setImageDetectionSettings({
+          ...imageDetectionSettings,
+          [channelId]: settings,
+        })
+
+        toast({
+          title: "Image Detection Settings Saved",
+          description: settings.enabled
+            ? "Image detection has been enabled for this channel"
+            : "Image detection has been disabled for this channel",
+        })
+      } catch (fetchError) {
+        console.error("Fetch error when saving image detection settings:", fetchError)
+        throw new Error(`Network error: ${fetchError.message}`)
       }
-
-      // Update local state
-      setImageDetectionSettings({
-        ...imageDetectionSettings,
-        [channelId]: settings,
-      })
-
-      toast({
-        title: "Image Detection Settings Saved",
-        description: settings.enabled
-          ? "Image detection has been enabled for this channel"
-          : "Image detection has been disabled for this channel",
-      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error("Error saving image detection settings:", error)
@@ -683,12 +712,22 @@ export default function Home() {
     }
   }, [transcodeFormat])
 
+  // Improved effect to load backup streams and image detection settings
   useEffect(() => {
     if (channels.length > 0) {
+      // Clear existing data first to avoid stale data
+      setBackupStreams({})
+      setImageDetectionSettings({})
+
       // Add a small delay to ensure the UI is responsive first
       const timer = setTimeout(() => {
-        loadAllBackupStreams()
-        loadImageDetectionSettings()
+        // Load backup streams first
+        loadAllBackupStreams().then(() => {
+          // Then load image detection settings after a small delay
+          setTimeout(() => {
+            loadImageDetectionSettings()
+          }, 500)
+        })
       }, 500)
 
       return () => clearTimeout(timer)

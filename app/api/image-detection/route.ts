@@ -13,13 +13,13 @@ const imageDetectionStore: Record<
 > = {}
 
 export async function GET(request: NextRequest) {
-  const channelId = request.nextUrl.searchParams.get("channelId")
-
-  if (!channelId) {
-    return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
-  }
-
   try {
+    const channelId = request.nextUrl.searchParams.get("channelId")
+
+    if (!channelId) {
+      return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
+    }
+
     console.log(`Retrieving image detection settings for channel ID: ${channelId}`)
 
     // No validation needed - we accept any channel ID format now
@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
       similarityThreshold: 85,
       checkInterval: 10,
     }
-    return Response.json({ settings })
+
+    return Response.json({
+      settings,
+      channelId,
+    })
   } catch (error) {
     console.error("Error retrieving image detection settings:", error)
     return Response.json(
@@ -43,7 +47,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { channelId, originalId, settings } = await request.json()
+    const body = await request.json()
+    const { channelId, originalId, settings } = body
 
     if (!channelId) {
       return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
@@ -52,6 +57,8 @@ export async function POST(request: NextRequest) {
     if (!settings) {
       return Response.json({ error: "Missing settings" }, { status: 400 })
     }
+
+    console.log(`Saving image detection settings for channel ID: ${channelId}, original ID: ${originalId || "unknown"}`)
 
     // Validate settings
     const validatedSettings = {

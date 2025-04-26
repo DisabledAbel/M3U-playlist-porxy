@@ -5,18 +5,22 @@ import type { NextRequest } from "next/server"
 const backupStreamsStore: Record<string, { url: string; priority: number }[]> = {}
 
 export async function GET(request: NextRequest) {
-  const channelId = request.nextUrl.searchParams.get("channelId")
-
-  if (!channelId) {
-    return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
-  }
-
   try {
+    const channelId = request.nextUrl.searchParams.get("channelId")
+
+    if (!channelId) {
+      return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
+    }
+
     console.log(`Retrieving backup streams for channel ID: ${channelId}`)
 
     // No validation needed - we accept any channel ID format now
     const backupStreams = backupStreamsStore[channelId] || []
-    return Response.json({ backupStreams })
+
+    return Response.json({
+      backupStreams,
+      channelId,
+    })
   } catch (error) {
     console.error("Error retrieving backup streams:", error)
     return Response.json(
@@ -31,7 +35,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { channelId, originalId, streams } = await request.json()
+    const body = await request.json()
+    const { channelId, originalId, streams } = body
 
     if (!channelId) {
       return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
@@ -40,6 +45,9 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(streams)) {
       return Response.json({ error: "Streams must be an array" }, { status: 400 })
     }
+
+    console.log(`Saving backup streams for channel ID: ${channelId}, original ID: ${originalId || "unknown"}`)
+    console.log(`Received ${streams.length} streams`)
 
     // Validate stream URLs
     const validStreams = streams.filter((stream) => {
