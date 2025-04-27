@@ -277,71 +277,52 @@ export default function Home() {
     }
   }
 
-  // Completely revised loadAllBackupStreams function with robust error handling
+  // Completely revised loadAllBackupStreams function using POST instead of GET
   const loadAllBackupStreams = async () => {
     try {
       console.log("Starting to load backup streams for all channels...")
       const allBackups: Record<string, BackupStream[]> = {}
 
-      // Process channels in batches to avoid too many simultaneous requests
-      const batchSize = 5
-      for (let i = 0; i < channels.length; i += batchSize) {
-        const batch = channels.slice(i, i + batchSize)
-
-        // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
-        const results = await Promise.allSettled(
-          batch.map(async (channel) => {
-            if (!channel.id) return null // Skip channels without IDs
-
-            try {
-              console.log(`Loading backup streams for "${channel.name}" (ID: ${channel.id})`)
-
-              // Make the API request with the channel ID
-              try {
-                // Use a simple string concatenation approach with proper encoding
-                const apiUrl = `/api/backup-streams?channelId=${encodeURIComponent(channel.id)}`
-                console.log(`Fetching from URL: ${apiUrl}`)
-
-                const response = await fetch(apiUrl)
-
-                if (response.ok) {
-                  const data = await response.json()
-                  if (data.backupStreams && Array.isArray(data.backupStreams)) {
-                    return {
-                      channelId: channel.id,
-                      streams: data.backupStreams.map((stream: any) => ({
-                        id: Math.random().toString(36).substring(2, 9),
-                        url: stream.url,
-                        priority: stream.priority,
-                      })),
-                    }
-                  }
-                } else {
-                  console.warn(
-                    `Failed to load backup streams for ${channel.name}: ${response.status} ${response.statusText}`,
-                  )
-                }
-              } catch (fetchError) {
-                console.error(`Fetch error for channel ${channel.name}:`, fetchError)
-              }
-            } catch (error) {
-              console.error(`Error loading backup streams for channel ${channel.name}:`, error)
-            }
-            return null
+      // Instead of making individual GET requests for each channel,
+      // make a single POST request with all channel IDs
+      try {
+        const response = await fetch("/api/backup-streams/batch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            channels: channels.map((channel) => ({
+              id: channel.id,
+              name: channel.name,
+            })),
           }),
-        )
-
-        // Process successful results
-        results.forEach((result) => {
-          if (result.status === "fulfilled" && result.value) {
-            allBackups[result.value.channelId] = result.value.streams
-          }
         })
 
-        // Add a small delay between batches to avoid overwhelming the server
-        if (i + batchSize < channels.length) {
-          await delay(300)
+        if (response.ok) {
+          const data = await response.json()
+
+          // Process the batch response
+          if (data.results) {
+            Object.entries(data.results).forEach(([channelId, streams]) => {
+              if (Array.isArray(streams)) {
+                allBackups[channelId] = streams.map((stream: any) => ({
+                  id: Math.random().toString(36).substring(2, 9),
+                  url: stream.url,
+                  priority: stream.priority,
+                }))
+              }
+            })
+          }
+        } else {
+          console.warn("Failed to load backup streams in batch mode")
+          // Fall back to individual requests if batch fails
+          await loadBackupStreamsIndividually()
         }
+      } catch (error) {
+        console.error("Error in batch loading of backup streams:", error)
+        // Fall back to individual requests if batch fails
+        await loadBackupStreamsIndividually()
       }
 
       setBackupStreams(allBackups)
@@ -356,67 +337,116 @@ export default function Home() {
     }
   }
 
-  // Completely revised loadImageDetectionSettings function with robust error handling
+  // Fallback method to load backup streams individually
+  const loadBackupStreamsIndividually = async () => {
+    const allBackups: Record<string, BackupStream[]> = {}
+
+    // Process channels in batches to avoid too many simultaneous requests
+    const batchSize = 5
+    for (let i = 0; i < channels.length; i += batchSize) {
+      const batch = channels.slice(i, i + batchSize)
+
+      // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
+      const results = await Promise.allSettled(
+        batch.map(async (channel) => {
+          if (!channel.id) return null // Skip channels without IDs
+
+          try {
+            console.log(`Loading backup streams for "${channel.name}" (ID: ${channel.id})`)
+
+            // Use POST instead of GET to avoid URL encoding issues
+            try {
+              const response = await fetch("/api/backup-streams/get", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ channelId: channel.id }),
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                if (data.backupStreams && Array.isArray(data.backupStreams)) {
+                  return {
+                    channelId: channel.id,
+                    streams: data.backupStreams.map((stream: any) => ({
+                      id: Math.random().toString(36).substring(2, 9),
+                      url: stream.url,
+                      priority: stream.priority,
+                    })),
+                  }
+                }
+              } else {
+                console.warn(
+                  `Failed to load backup streams for ${channel.name}: ${response.status} ${response.statusText}`,
+                )
+              }
+            } catch (fetchError) {
+              console.error(`Fetch error for channel ${channel.name}:`, fetchError)
+            }
+          } catch (error) {
+            console.error(`Error loading backup streams for channel ${channel.name}:`, error)
+          }
+          return null
+        }),
+      )
+
+      // Process successful results
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          allBackups[result.value.channelId] = result.value.streams
+        }
+      })
+
+      // Add a small delay between batches to avoid overwhelming the server
+      if (i + batchSize < channels.length) {
+        await delay(300)
+      }
+    }
+
+    return allBackups
+  }
+
+  // Completely revised loadImageDetectionSettings function using POST instead of GET
   const loadImageDetectionSettings = async () => {
     try {
       console.log("Starting to load image detection settings for all channels...")
       const allSettings: Record<string, ImageDetectionConfig> = {}
 
-      // Process channels in batches to avoid too many simultaneous requests
-      const batchSize = 5
-      for (let i = 0; i < channels.length; i += batchSize) {
-        const batch = channels.slice(i, i + batchSize)
-
-        // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
-        const results = await Promise.allSettled(
-          batch.map(async (channel) => {
-            if (!channel.id) return null
-
-            try {
-              console.log(`Loading image detection for "${channel.name}" (ID: ${channel.id})`)
-
-              // Make the API request with the channel ID
-              try {
-                // Use a simple string concatenation approach with proper encoding
-                const apiUrl = `/api/image-detection?channelId=${encodeURIComponent(channel.id)}`
-                console.log(`Fetching from URL: ${apiUrl}`)
-
-                const response = await fetch(apiUrl)
-
-                if (response.ok) {
-                  const data = await response.json()
-                  if (data.settings) {
-                    return {
-                      channelId: channel.id,
-                      settings: data.settings,
-                    }
-                  }
-                } else {
-                  console.warn(
-                    `Failed to load image detection settings for ${channel.name}: ${response.status} ${response.statusText}`,
-                  )
-                }
-              } catch (fetchError) {
-                console.error(`Fetch error for channel ${channel.name}:`, fetchError)
-              }
-            } catch (error) {
-              console.error(`Error loading image detection settings for channel ${channel.name}:`, error)
-            }
-            return null
+      // Instead of making individual GET requests for each channel,
+      // make a single POST request with all channel IDs
+      try {
+        const response = await fetch("/api/image-detection/batch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            channels: channels.map((channel) => ({
+              id: channel.id,
+              name: channel.name,
+            })),
           }),
-        )
-
-        // Process successful results
-        results.forEach((result) => {
-          if (result.status === "fulfilled" && result.value) {
-            allSettings[result.value.channelId] = result.value.settings
-          }
         })
 
-        // Add a small delay between batches to avoid overwhelming the server
-        if (i + batchSize < channels.length) {
-          await delay(300)
+        if (response.ok) {
+          const data = await response.json()
+
+          // Process the batch response
+          if (data.results) {
+            Object.entries(data.results).forEach(([channelId, settings]) => {
+              allSettings[channelId] = settings as ImageDetectionConfig
+            })
+          }
+        } else {
+          console.warn("Failed to load image detection settings in batch mode")
+          // Fall back to individual requests if batch fails
+          await loadImageDetectionSettingsIndividually()
         }
+      } catch (error) {
+        console.error("Error in batch loading of image detection settings:", error)
+        // Fall back to individual requests if batch fails
+        await loadImageDetectionSettingsIndividually()
       }
 
       setImageDetectionSettings(allSettings)
@@ -424,6 +454,72 @@ export default function Home() {
     } catch (error) {
       console.error("Error loading image detection settings:", error)
     }
+  }
+
+  // Fallback method to load image detection settings individually
+  const loadImageDetectionSettingsIndividually = async () => {
+    const allSettings: Record<string, ImageDetectionConfig> = {}
+
+    // Process channels in batches to avoid too many simultaneous requests
+    const batchSize = 5
+    for (let i = 0; i < channels.length; i += batchSize) {
+      const batch = channels.slice(i, i + batchSize)
+
+      // Use Promise.allSettled instead of Promise.all to continue even if some requests fail
+      const results = await Promise.allSettled(
+        batch.map(async (channel) => {
+          if (!channel.id) return null
+
+          try {
+            console.log(`Loading image detection for "${channel.name}" (ID: ${channel.id})`)
+
+            // Use POST instead of GET to avoid URL encoding issues
+            try {
+              const response = await fetch("/api/image-detection/get", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ channelId: channel.id }),
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                if (data.settings) {
+                  return {
+                    channelId: channel.id,
+                    settings: data.settings,
+                  }
+                }
+              } else {
+                console.warn(
+                  `Failed to load image detection settings for ${channel.name}: ${response.status} ${response.statusText}`,
+                )
+              }
+            } catch (fetchError) {
+              console.error(`Fetch error for channel ${channel.name}:`, fetchError)
+            }
+          } catch (error) {
+            console.error(`Error loading image detection settings for channel ${channel.name}:`, error)
+          }
+          return null
+        }),
+      )
+
+      // Process successful results
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          allSettings[result.value.channelId] = result.value.settings
+        }
+      })
+
+      // Add a small delay between batches to avoid overwhelming the server
+      if (i + batchSize < channels.length) {
+        await delay(300)
+      }
+    }
+
+    return allSettings
   }
 
   const copyToClipboard = () => {

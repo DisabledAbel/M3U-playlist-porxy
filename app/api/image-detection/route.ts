@@ -14,7 +14,9 @@ const imageDetectionStore: Record<
 
 export async function GET(request: NextRequest) {
   try {
-    const channelId = request.nextUrl.searchParams.get("channelId")
+    // Get the channel ID from the query parameters
+    const url = new URL(request.url)
+    const channelId = url.searchParams.get("channelId")
 
     if (!channelId) {
       return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`Retrieving image detection settings for channel ID: ${channelId}`)
 
-    // No validation needed - we accept any channel ID format now
+    // Use the channel ID as-is without any validation or transformation
     const settings = imageDetectionStore[channelId] || {
       enabled: false,
       similarityThreshold: 85,
