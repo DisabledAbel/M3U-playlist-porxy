@@ -23,17 +23,8 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 
 ---
 
-# 📥 Installation 
-
-
-
-
-🔄 How to Update Your Live Vercel App
-
-Vercel automatically redeploys your app with the new changes. 🚀
-No extra steps needed!
-
-You can track the deployment progress on your Vercel Dashboard.
+# 📥 Installation
+[![Install App](https://img.shields.io/badge/Install--App-blue?style=for-the-badge&logo=github)](https://github.com/apps/m3u-playlist-proxy-bata-version/installations/new)
 
 
 
