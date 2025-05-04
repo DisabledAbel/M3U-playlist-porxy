@@ -3,17 +3,27 @@ import { backupStreamsStore } from "../route"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Parse the request body safely
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return Response.json({ error: "Invalid JSON in request body" }, { status: 400 })
+    }
+
     const { channelId } = body
 
-    if (!channelId) {
-      return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
+    if (!channelId || typeof channelId !== "string") {
+      return Response.json({ error: "Missing or invalid channelId parameter" }, { status: 400 })
     }
 
     console.log(`Retrieving backup streams for channel ID: ${channelId}`)
+    console.log(`Available keys in backupStreamsStore:`, Object.keys(backupStreamsStore))
 
     // Use the channel ID as-is without any validation or transformation
     const backupStreams = backupStreamsStore[channelId] || []
+    console.log(`Found ${backupStreams.length} backup streams for channel ID: ${channelId}`)
 
     return Response.json({
       backupStreams,

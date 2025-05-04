@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BackupStreamManager, type BackupStream } from "@/components/backup-stream-manager"
+import { PlaylistImport } from "@/components/playlist-import"
 
 interface Group {
   id: string
@@ -165,7 +166,20 @@ export default function Home() {
       updateProxyUrl()
 
       // Fetch channel list for backup streams
-      fetchChannels()
+      const loadedChannels = await fetchChannels()
+
+      // If channels were loaded successfully, load backup streams
+      if (loadedChannels && loadedChannels.length > 0) {
+        // Add a small delay to ensure the UI is responsive first
+        setTimeout(() => {
+          loadAllBackupStreams().then(() => {
+            // Then load image detection settings after a small delay
+            setTimeout(() => {
+              loadImageDetectionSettings()
+            }, 500)
+          })
+        }, 500)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setError(message)
@@ -193,7 +207,7 @@ export default function Home() {
 
   // Completely revised fetchChannels function with robust ID generation
   const fetchChannels = async () => {
-    if (!url) return
+    if (!url) return []
 
     try {
       setLoading(true)
@@ -217,6 +231,7 @@ export default function Home() {
           }
 
           const debugUrl = `${window.location.origin}/api/m3u-debug?url=${encodeURIComponent(url)}`
+          console.log(`Fetching channels from: ${debugUrl}`)
           const response = await fetch(debugUrl)
 
           if (!response.ok) {
@@ -262,8 +277,14 @@ export default function Home() {
 
         setChannels(extractedChannels)
         console.log(`Loaded ${extractedChannels.length} channels for backup stream management`)
+
+        // Clear existing backup streams when loading new channels
+        setBackupStreams({})
+
+        return extractedChannels
       } else {
         console.warn("No channels found in playlist")
+        return []
       }
     } catch (error) {
       console.error("Error fetching channels:", error)
@@ -272,61 +293,150 @@ export default function Home() {
         description: "Failed to load channels. Please try again.",
         variant: "destructive",
       })
+      return []
     } finally {
       setLoading(false)
     }
   }
 
-  // Completely revised loadAllBackupStreams function using POST instead of GET
+  // Handle importing a full playlist
+  const handleImportPlaylist = (importedChannels: any[], importMode: "merge" | "replace") => {
+    if (importMode === "replace") {
+      // Replace all existing channels
+      setChannels(importedChannels)
+
+      // Extract unique groups from imported channels
+      const uniqueGroups = new Set<string>()
+      importedChannels.forEach((channel) => {
+        if (channel.group) uniqueGroups.add(channel.group)
+      })
+
+      // Create group objects
+      setGroups(
+        Array.from(uniqueGroups).map((group) => ({
+          id: Math.random().toString(36).substring(2, 9),
+          originalName: group,
+          newName: group,
+        })),
+      )
+    } else {
+      // Merge with existing channels
+      // First, create a map of existing channels by name to avoid duplicates
+      const existingChannelMap = new Map<string, boolean>()
+      channels.forEach((channel) => {
+        existingChannelMap.set(channel.name, true)
+      })
+
+      // Filter out duplicates and add new channels
+      const newChannels = importedChannels.filter((channel) => !existingChannelMap.has(channel.name))
+
+      // Merge channels
+      setChannels([...channels, ...newChannels])
+
+      // Merge groups
+      const existingGroupMap = new Map<string, boolean>()
+      groups.forEach((group) => {
+        existingGroupMap.set(group.originalName, true)
+      })
+
+      // Extract unique new groups
+      const newGroups: Group[] = []
+      importedChannels.forEach((channel) => {
+        if (channel.group && !existingGroupMap.has(channel.group)) {
+          existingGroupMap.set(channel.group, true)
+          newGroups.push({
+            id: Math.random().toString(36).substring(2, 9),
+            originalName: channel.group,
+            newName: channel.group,
+          })
+        }
+      })
+
+      // Merge groups
+      setGroups([...groups, ...newGroups])
+    }
+
+    // Show success message
+    toast({
+      title: "Playlist Imported",
+      description: `Successfully imported ${importedChannels.length} channels`,
+    })
+
+    // Update the proxy URL if we have a URL
+    if (url) {
+      updateProxyUrl()
+    }
+  }
+
+  // Replace the loadAllBackupStreams function with this improved version
   const loadAllBackupStreams = async () => {
     try {
       console.log("Starting to load backup streams for all channels...")
+
+      if (channels.length === 0) {
+        console.log("No channels to load backup streams for")
+        return {}
+      }
+
       const allBackups: Record<string, BackupStream[]> = {}
 
       // Instead of making individual GET requests for each channel,
       // make a single POST request with all channel IDs
       try {
+        console.log(`Sending batch request for ${channels.length} channels`)
+        const channelData = channels.map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+        }))
+
+        console.log("Channel data for batch request:", channelData)
+
         const response = await fetch("/api/backup-streams/batch", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            channels: channels.map((channel) => ({
-              id: channel.id,
-              name: channel.name,
-            })),
+            channels: channelData,
           }),
         })
 
         if (response.ok) {
           const data = await response.json()
+          console.log("Batch response data:", data)
 
           // Process the batch response
           if (data.results) {
             Object.entries(data.results).forEach(([channelId, streams]) => {
               if (Array.isArray(streams)) {
-                allBackups[channelId] = streams.map((stream: any) => ({
-                  id: Math.random().toString(36).substring(2, 9),
-                  url: stream.url,
-                  priority: stream.priority,
-                }))
+                console.log(`Loaded ${streams.length} backup streams for channel ID: ${channelId}`)
+                if (streams.length > 0) {
+                  allBackups[channelId] = streams.map((stream: any) => ({
+                    id: Math.random().toString(36).substring(2, 9),
+                    url: stream.url,
+                    priority: stream.priority,
+                  }))
+                }
               }
             })
           }
         } else {
-          console.warn("Failed to load backup streams in batch mode")
+          console.warn("Failed to load backup streams in batch mode:", response.status, response.statusText)
           // Fall back to individual requests if batch fails
-          await loadBackupStreamsIndividually()
+          const individualBackups = await loadBackupStreamsIndividually()
+          Object.assign(allBackups, individualBackups)
         }
       } catch (error) {
         console.error("Error in batch loading of backup streams:", error)
         // Fall back to individual requests if batch fails
-        await loadBackupStreamsIndividually()
+        const individualBackups = await loadBackupStreamsIndividually()
+        Object.assign(allBackups, individualBackups)
       }
 
+      console.log("Final backup streams:", allBackups)
       setBackupStreams(allBackups)
-      console.log("Loaded all backup streams:", allBackups)
+
+      return allBackups
     } catch (error) {
       console.error("Error loading backup streams:", error)
       toast({
@@ -334,10 +444,11 @@ export default function Home() {
         description: "Some backup streams could not be loaded",
         variant: "destructive",
       })
+      return {}
     }
   }
 
-  // Fallback method to load backup streams individually
+  // Replace the loadBackupStreamsIndividually function with this improved version
   const loadBackupStreamsIndividually = async () => {
     const allBackups: Record<string, BackupStream[]> = {}
 
@@ -367,13 +478,16 @@ export default function Home() {
               if (response.ok) {
                 const data = await response.json()
                 if (data.backupStreams && Array.isArray(data.backupStreams)) {
-                  return {
-                    channelId: channel.id,
-                    streams: data.backupStreams.map((stream: any) => ({
-                      id: Math.random().toString(36).substring(2, 9),
-                      url: stream.url,
-                      priority: stream.priority,
-                    })),
+                  console.log(`Received ${data.backupStreams.length} backup streams for channel ID: ${channel.id}`)
+                  if (data.backupStreams.length > 0) {
+                    return {
+                      channelId: channel.id,
+                      streams: data.backupStreams.map((stream: any) => ({
+                        id: Math.random().toString(36).substring(2, 9),
+                        url: stream.url,
+                        priority: stream.priority,
+                      })),
+                    }
                   }
                 }
               } else {
@@ -441,18 +555,22 @@ export default function Home() {
         } else {
           console.warn("Failed to load image detection settings in batch mode")
           // Fall back to individual requests if batch fails
-          await loadImageDetectionSettingsIndividually()
+          const individualSettings = await loadImageDetectionSettingsIndividually()
+          Object.assign(allSettings, individualSettings)
         }
       } catch (error) {
         console.error("Error in batch loading of image detection settings:", error)
         // Fall back to individual requests if batch fails
-        await loadImageDetectionSettingsIndividually()
+        const individualSettings = await loadImageDetectionSettingsIndividually()
+        Object.assign(allSettings, individualSettings)
       }
 
       setImageDetectionSettings(allSettings)
       console.log("Loaded image detection settings:", allSettings)
+      return allSettings
     } catch (error) {
       console.error("Error loading image detection settings:", error)
+      return {}
     }
   }
 
@@ -672,25 +790,44 @@ export default function Home() {
     }
   }
 
-  // Update the saveBackupStreams function to use the channel ID directly
+  // Replace the saveBackupStreams function with this improved version
   const saveBackupStreams = async (streams: BackupStream[]) => {
     if (!selectedChannel) return
 
     try {
       console.log(`Saving backup streams for channel: ${selectedChannel.name} (ID: ${selectedChannel.id})`)
 
+      // Filter out invalid URLs before sending
+      const validStreams = streams.filter((stream) => {
+        try {
+          // Basic URL validation
+          return typeof stream.url === "string" && stream.url.trim() !== "" && stream.url.includes("://")
+        } catch (e) {
+          return false
+        }
+      })
+
+      console.log(`Sending ${validStreams.length} valid streams to server`)
+
       // Save to the server using the channel ID directly
       try {
+        const payload = {
+          channelId: selectedChannel.id,
+          originalId: selectedChannel.originalId, // Store the original ID for reference
+          streams: validStreams.map((s) => ({
+            url: s.url,
+            priority: s.priority || 1, // Ensure priority is always a number
+          })),
+        }
+
+        console.log("Sending payload:", JSON.stringify(payload))
+
         const response = await fetch("/api/backup-streams", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            channelId: selectedChannel.id,
-            originalId: selectedChannel.originalId, // Store the original ID for reference
-            streams: streams.map((s) => ({ url: s.url, priority: s.priority })),
-          }),
+          body: JSON.stringify(payload),
         })
 
         const data = await response.json()
@@ -704,17 +841,17 @@ export default function Home() {
         // Update local state
         setBackupStreams({
           ...backupStreams,
-          [selectedChannel.id]: streams,
+          [selectedChannel.id]: validStreams,
         })
 
         setBackupDialogOpen(false)
         toast({
           title: "Backup Streams Saved",
-          description: `${streams.length} backup streams saved for ${selectedChannel.name}`,
+          description: `${validStreams.length} backup streams saved for ${selectedChannel.name}`,
         })
       } catch (fetchError) {
         console.error("Fetch error when saving backup streams:", fetchError)
-        throw new Error(`Network error: ${fetchError.message}`)
+        throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -766,7 +903,7 @@ export default function Home() {
         })
       } catch (fetchError) {
         console.error("Fetch error when saving image detection settings:", fetchError)
-        throw new Error(`Network error: ${fetchError.message}`)
+        throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -867,9 +1004,12 @@ export default function Home() {
                   Use Test Playlist
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Enter a direct URL to an M3U playlist or use our test playlist for demonstration
-              </p>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">
+                  Enter a direct URL to an M3U playlist or use our test playlist for demonstration
+                </p>
+                <PlaylistImport onImport={handleImportPlaylist} />
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -1169,7 +1309,11 @@ export default function Home() {
                                 <TableCell>{channel.group || "—"}</TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex items-center justify-center gap-1">
-                                    <span>{backupStreams[channel.id]?.length || 0}</span>
+                                    <span>
+                                      {backupStreams[channel.id] && backupStreams[channel.id].length > 0
+                                        ? backupStreams[channel.id].length
+                                        : 0}
+                                    </span>
                                     {imageDetectionSettings[channel.id]?.enabled && (
                                       <div className="ml-1" title="Image detection enabled">
                                         <ImageIcon className="h-3 w-3 text-blue-500" />

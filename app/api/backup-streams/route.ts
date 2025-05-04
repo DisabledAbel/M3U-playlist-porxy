@@ -37,11 +37,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Parse the request body safely
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return Response.json({ error: "Invalid JSON in request body" }, { status: 400 })
+    }
+
     const { channelId, originalId, streams } = body
 
-    if (!channelId) {
-      return Response.json({ error: "Missing channelId parameter" }, { status: 400 })
+    // Validate required fields
+    if (!channelId || typeof channelId !== "string") {
+      return Response.json({ error: "Missing or invalid channelId parameter" }, { status: 400 })
     }
 
     if (!Array.isArray(streams)) {
@@ -57,15 +66,21 @@ export async function POST(request: NextRequest) {
         // Basic URL validation
         return typeof stream.url === "string" && stream.url.trim() !== "" && stream.url.includes("://")
       } catch (e) {
+        console.warn("Invalid stream:", stream, e)
         return false
       }
     })
 
+    console.log(`Found ${validStreams.length} valid streams`)
+
     // Store the backup streams using the channel ID as the key
     backupStreamsStore[channelId] = validStreams.map((stream: any, index: number) => ({
       url: stream.url,
-      priority: stream.priority || index + 1,
+      priority: typeof stream.priority === "number" ? stream.priority : index + 1,
     }))
+
+    // Log the updated store for debugging
+    console.log(`Updated backupStreamsStore for ${channelId}:`, backupStreamsStore[channelId])
 
     // Return the updated store for debugging
     return Response.json({

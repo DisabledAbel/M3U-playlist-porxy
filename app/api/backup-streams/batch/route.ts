@@ -3,7 +3,15 @@ import { backupStreamsStore } from "../route"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Parse the request body safely
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return Response.json({ error: "Invalid JSON in request body" }, { status: 400 })
+    }
+
     const { channels } = body
 
     if (!Array.isArray(channels)) {
@@ -11,6 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`Processing batch request for ${channels.length} channels`)
+    console.log("Available keys in backupStreamsStore:", Object.keys(backupStreamsStore))
 
     // Create a results object to store the backup streams for each channel
     const results: Record<string, any[]> = {}
@@ -19,7 +28,13 @@ export async function POST(request: NextRequest) {
     channels.forEach((channel) => {
       const { id } = channel
       if (id) {
-        results[id] = backupStreamsStore[id] || []
+        // Log for debugging
+        console.log(`Looking up backup streams for channel ID: ${id}`)
+
+        const streams = backupStreamsStore[id] || []
+        console.log(`Found ${streams.length} backup streams for channel ID: ${id}`)
+
+        results[id] = streams
       }
     })
 

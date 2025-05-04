@@ -132,8 +132,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Update the processPlaylistSimple function to ensure it correctly processes channels
-
+// Update the processPlaylistSimple function to use a more reliable channel ID generation approach
 function processPlaylistSimple(
   content: string,
   baseUrl: string,
@@ -155,7 +154,7 @@ function processPlaylistSimple(
   let extinfs = 0
   let urls = 0
   let currentExtInf = ""
-  let currentChannelId = ""
+  let channelCounter = 0 // Use a simple counter for channel IDs
 
   // Ensure the playlist starts with #EXTM3U if it doesn't already
   if (!lines.some((line) => line.trim().startsWith("#EXTM3U"))) {
@@ -181,11 +180,6 @@ function processPlaylistSimple(
     if (line.startsWith("#EXTINF")) {
       extinfs++
       currentExtInf = line
-
-      // Generate a unique ID for this channel based on the EXTINF line
-      // This will be used to look up backup streams
-      currentChannelId = generateChannelId(line)
-
       result.push(line)
       continue
     }
@@ -199,6 +193,8 @@ function processPlaylistSimple(
     // Handle URL lines (anything that's not a comment or empty)
     if (line.includes("://")) {
       urls++
+      channelCounter++ // Increment channel counter for each URL
+      const currentChannelId = `channel_${channelCounter}` // Generate a simple numeric ID
 
       // Process the primary URL
       let processedUrl: string
@@ -213,7 +209,7 @@ function processPlaylistSimple(
       result.push(processedUrl)
 
       // Add backup streams if available and enabled
-      if (includeBackups && currentChannelId) {
+      if (includeBackups) {
         console.log(`Looking for backup streams for channel ID: ${currentChannelId}`)
         const backupStreams = backupStreamsStore[currentChannelId] || []
         console.log(`Found ${backupStreams.length} backup streams`)
@@ -244,9 +240,6 @@ function processPlaylistSimple(
           result.push(backupProcessedUrl)
         }
       }
-
-      // Reset the channel ID after processing
-      currentChannelId = ""
     } else {
       // Not a URL, keep as is
       result.push(line)
@@ -255,41 +248,6 @@ function processPlaylistSimple(
 
   console.log(`Processed ${extinfs} EXTINF entries and ${urls} URLs`)
   return result.join("\n")
-}
-
-// Helper function to generate a unique ID for a channel based on its EXTINF line
-function generateChannelId(extinf: string): string {
-  try {
-    // Extract tvg-id if available
-    const tvgIdMatch = extinf.match(/tvg-id="([^"]*)"/)
-    if (tvgIdMatch && tvgIdMatch[1]) {
-      return tvgIdMatch[1]
-    }
-
-    // Extract channel name
-    const channelName = extractChannelName(extinf)
-    if (channelName) {
-      // Create a URL-safe base64 encoding
-      return Buffer.from(channelName)
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=/g, "")
-        .substring(0, 16)
-    }
-
-    // Fallback to a hash of the entire EXTINF line
-    return Buffer.from(extinf)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=/g, "")
-      .substring(0, 16)
-  } catch (error) {
-    // If all else fails, generate a random ID
-    console.error("Error generating channel ID:", error)
-    return `channel-${Math.random().toString(36).substring(2, 10)}`
-  }
 }
 
 // Helper function to extract the channel name from an EXTINF line
