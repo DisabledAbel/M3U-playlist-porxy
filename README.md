@@ -23,67 +23,29 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 
 ---
 
-# 📥 Installation
-✨ What You’ll Need
+# 📥 Installation 
 
-Before we start, make sure you have:
 
-A GitHub account (free) → Create one
-A Vercel account (free) → Create one
-Node.js installed → Download here
-(This helps run the app on your computer)
-💻 Set It Up on Your Computer (PC or Mac)
 
-1. Get the App Code
-Open Terminal (Mac) or Command Prompt (Windows)
-Copy-paste this and hit enter:
+UPDSTES: Vercel Deployment Guide
 
-git clone https://github.com/your-username/your-repo-name.git
-Then go inside the folder:
+🔄 How to Update Your Live Vercel App
 
-cd your-repo-name
-2. Install Everything the App Needs
-Just run this:
+Whenever you make changes to the app, here’s how to get the latest version live on Vercel:
 
-npm install
-It will take a minute to set up.
+1️⃣ Make Your Changes
+Edit your files on your computer as needed.
 
-3. Start the App!
-Run:
+2️⃣ Push Changes to GitHub
+In your project folder, open Terminal and run:
 
-npm run dev
-Now open http://localhost:3000 in your web browser — your app is live on your computer! 🎉
-
-📱 See the App on Your Phone
-
-Want to check how it looks on your phone?
-
-Make sure your phone and computer are on the same Wi-Fi
-In Terminal / Command Prompt, find your computer’s IP address:
-Mac / Linux:
-ifconfig
-Windows:
-ipconfig
-Look for an IP like 192.168.x.x
-
-Run this to make the app visible to your phone:
-npm run dev -- --host
-On your phone’s browser, type:
-http://your-ip-address:3000
-Example: http://192.168.1.15:3000
-
-🚀 If you want to update the live app (Vercel website)
-Whenever you make changes, here’s how to put them online:
-
-Save your changes locally
-Push them to GitHub:
-git add .
-git commit -m "Describe your update here"
+git commit -am "Describe what you updated"
 git push
-Vercel will automatically detect the update and redeploy your site ✨
+3️⃣ Vercel Auto-Deploys!
+Once you push your changes to GitHub, Vercel automatically redeploys your app with the new changes. 🚀
+No extra steps needed!
 
-✅ Your live site will refresh in a few seconds
-✅ No extra steps on Vercel needed!
+You can track the deployment progress on your Vercel Dashboard.
 
 
 
