@@ -27,22 +27,10 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 
 
 
-UPDSTES: Vercel Deployment Guide
 
 🔄 How to Update Your Live Vercel App
 
-Whenever you make changes to the app, here’s how to get the latest version live on Vercel:
-
-1️⃣ Make Your Changes
-Edit your files on your computer as needed.
-
-2️⃣ Push Changes to GitHub
-In your project folder, open Terminal and run:
-
-git commit -am "Describe what you updated"
-git push
-3️⃣ Vercel Auto-Deploys!
-Once you push your changes to GitHub, Vercel automatically redeploys your app with the new changes. 🚀
+Vercel automatically redeploys your app with the new changes. 🚀
 No extra steps needed!
 
 You can track the deployment progress on your Vercel Dashboard.
