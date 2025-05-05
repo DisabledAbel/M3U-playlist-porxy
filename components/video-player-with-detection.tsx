@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { captureVideoFrame, compareImages, loadImage } from "@/lib/image-comparison"
-import { AlertCircle, CheckCircle2, RefreshCcw } from "lucide-react"
+import { RefreshCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StreamSwitchNotification } from "./stream-switch-notification"
+import { StreamHealthMonitor } from "./stream-health-monitor"
 
 interface VideoPlayerWithDetectionProps {
   primaryStreamUrl: string
@@ -32,13 +33,12 @@ export function VideoPlayerWithDetection({
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const referenceImageRef = useRef<HTMLImageElement | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [showSwitchNotification, setShowSwitchNotification] = useState(false)
-  const [switchMessage, setSwitchMessage] = useState("")
-  const [switchType, setSwitchType] = useState<"backup" | "primary" | "">("")
   const [errorCount, setErrorCount] = useState(0)
   const maxErrorCount = 3 // Maximum number of errors before switching streams
   const [isUsingBackup, setIsUsingBackup] = useState(false)
   const [showNotification, setShowNotification] = useState(false)
+  const [showHealthMonitor, setShowHealthMonitor] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   // Load reference image when URL changes
   useEffect(() => {
@@ -154,6 +154,14 @@ export function VideoPlayerWithDetection({
   // Switch to the next available stream
   const switchToNextStream = () => {
     setIsLoading(true)
+
+    // Make sure we have backup streams to switch to
+    if (!backupStreams || backupStreams.length === 0) {
+      console.log("No backup streams available")
+      setIsLoading(false)
+      return
+    }
+
     const sortedBackups = [...backupStreams].sort((a, b) => a.priority - b.priority)
 
     // If we're already on a backup stream, try the next one
@@ -161,18 +169,22 @@ export function VideoPlayerWithDetection({
 
     if (nextIndex < sortedBackups.length) {
       // Switch to next backup
+      console.log(`Switching to backup stream ${nextIndex + 1}: ${sortedBackups[nextIndex].url}`)
       setCurrentStreamUrl(sortedBackups[nextIndex].url)
       setCurrentStreamIndex(nextIndex)
-      showNotificationFunc("backup", `Switching to backup stream ${nextIndex + 1}`)
       setIsUsingBackup(true)
       setShowNotification(true)
     } else if (sortedBackups.length > 0 && currentStreamIndex === -1) {
       // Switch to first backup if we're on primary
+      console.log(`Switching to first backup stream: ${sortedBackups[0].url}`)
       setCurrentStreamUrl(sortedBackups[0].url)
       setCurrentStreamIndex(0)
-      showNotificationFunc("backup", "Switching to backup stream 1")
       setIsUsingBackup(true)
       setShowNotification(true)
+    } else {
+      // No more backups to try, stay on current stream
+      console.log("No more backup streams available")
+      setIsLoading(false)
     }
 
     setLastSwitchTime(Date.now())
@@ -181,56 +193,59 @@ export function VideoPlayerWithDetection({
   // Switch back to primary stream
   const switchToPrimaryStream = () => {
     setIsLoading(true)
+    console.log(`Switching back to primary stream: ${primaryStreamUrl}`)
     setCurrentStreamUrl(primaryStreamUrl)
     setCurrentStreamIndex(-1)
     setLastSwitchTime(Date.now())
-    showNotificationFunc("primary", "Switching back to primary stream")
     setIsUsingBackup(false)
     setShowNotification(true)
-  }
-
-  // Show notification when switching streams
-  const showNotificationFunc = (type: "backup" | "primary", message: string) => {
-    setSwitchType(type)
-    setSwitchMessage(message)
-    setShowSwitchNotification(true)
-
-    // Hide notification after 5 seconds
-    setTimeout(() => {
-      setShowSwitchNotification(false)
-    }, 5000)
   }
 
   // Handle video loaded data event
   const handleLoadedData = () => {
     setIsLoading(false)
     setErrorCount(0) // Reset error count when stream loads successfully
+    setIsPlaying(true)
+    console.log(`Stream loaded successfully: ${currentStreamUrl}`)
   }
 
-  // Function to switch to backup stream
-  const switchToBackupStreamManual = (index) => {
-    if (currentStreamIndex !== index) {
+  // Function to switch to backup stream manually
+  const switchToBackupStreamManual = (index: number) => {
+    if (index >= 0 && index < backupStreams.length && currentStreamIndex !== index) {
+      console.log(`Manually switching to backup stream ${index + 1}: ${backupStreams[index].url}`)
       setCurrentStreamIndex(index)
-      setIsUsingBackup(index >= 0)
+      setIsUsingBackup(true)
       setShowNotification(true)
       setCurrentStreamUrl(backupStreams[index].url)
-
-      // Log the stream switch
-      console.log(`Switched to ${index >= 0 ? "backup" : "main"} stream for ${channelName}`)
+      setLastSwitchTime(Date.now())
     }
   }
 
-  // Function to switch back to main stream
+  // Function to switch back to main stream manually
   const switchToPrimaryStreamManual = () => {
     if (currentStreamIndex !== -1) {
+      console.log(`Manually switching back to primary stream: ${primaryStreamUrl}`)
       setCurrentStreamIndex(-1)
       setIsUsingBackup(false)
       setShowNotification(true)
       setCurrentStreamUrl(primaryStreamUrl)
-
-      // Log the stream switch
-      console.log(`Switched back to main stream for ${channelName}`)
+      setLastSwitchTime(Date.now())
     }
+  }
+
+  // Handle video pause event
+  const handlePause = () => {
+    setIsPlaying(false)
+  }
+
+  // Handle video play event
+  const handlePlay = () => {
+    setIsPlaying(true)
+  }
+
+  // Toggle health monitor
+  const toggleHealthMonitor = () => {
+    setShowHealthMonitor(!showHealthMonitor)
   }
 
   return (
@@ -244,6 +259,8 @@ export function VideoPlayerWithDetection({
         className={cn("w-full rounded-lg transition-opacity duration-500", isLoading ? "opacity-50" : "opacity-100")}
         onError={handleVideoError}
         onLoadedData={handleLoadedData}
+        onPause={handlePause}
+        onPlay={handlePlay}
       />
 
       {/* Loading overlay */}
@@ -255,20 +272,6 @@ export function VideoPlayerWithDetection({
           </div>
         </div>
       )}
-
-      {/* Stream switch notification */}
-      <div
-        className={cn(
-          "absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full text-white font-medium shadow-lg transition-all duration-500",
-          showSwitchNotification ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-8",
-          switchType === "backup" ? "bg-amber-500" : "bg-green-500",
-        )}
-      >
-        <div className="flex items-center gap-2">
-          {switchType === "backup" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          <span>{switchMessage}</span>
-        </div>
-      </div>
 
       {/* Status indicators */}
       <div className="absolute top-2 right-2 flex gap-2">
@@ -287,6 +290,13 @@ export function VideoPlayerWithDetection({
 
       {/* Manual stream control buttons */}
       <div className="absolute bottom-16 right-2 flex flex-col gap-2">
+        <button
+          onClick={toggleHealthMonitor}
+          className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-full transition-colors"
+        >
+          {showHealthMonitor ? "Hide Health Monitor" : "Show Health Monitor"}
+        </button>
+
         {currentStreamIndex !== -1 && (
           <button
             onClick={switchToPrimaryStreamManual}
@@ -313,21 +323,10 @@ export function VideoPlayerWithDetection({
         onHide={() => setShowNotification(false)}
       />
 
-      {/* Controls for testing the notification */}
-      {/* <div className="mt-4 flex gap-2">
-        <button
-          onClick={switchToMainStreamManual}
-          className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-        >
-          Switch to Main Stream
-        </button>
-        <button
-          onClick={() => switchToBackupStreamManual(0)}
-          className="px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
-        >
-          Switch to Backup Stream
-        </button>
-      </div> */}
+      {/* Stream health monitor */}
+      {showHealthMonitor && (
+        <StreamHealthMonitor videoRef={videoRef} streamUrl={currentStreamUrl} isPlaying={isPlaying} />
+      )}
     </div>
   )
 }

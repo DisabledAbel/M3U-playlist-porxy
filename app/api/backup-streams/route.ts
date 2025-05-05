@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { channelId, originalId, streams } = body
+    let { channelId, originalId, streams } = body
 
     // Validate required fields
     if (!channelId || typeof channelId !== "string") {
@@ -57,6 +57,11 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Streams must be an array" }, { status: 400 })
     }
 
+    // Ensure originalId is always a string or null, never undefined
+    if (originalId === undefined) {
+      originalId = null
+    }
+
     console.log(`Saving backup streams for channel ID: ${channelId}, original ID: ${originalId || "unknown"}`)
     console.log(`Received ${streams.length} streams`)
 
@@ -64,7 +69,18 @@ export async function POST(request: NextRequest) {
     const validStreams = streams.filter((stream) => {
       try {
         // Basic URL validation
-        return typeof stream.url === "string" && stream.url.trim() !== "" && stream.url.includes("://")
+        if (typeof stream.url !== "string" || stream.url.trim() === "") {
+          return false
+        }
+
+        // More thorough URL validation
+        try {
+          new URL(stream.url)
+          return true
+        } catch (urlError) {
+          console.warn("Invalid URL format:", stream.url, urlError)
+          return false
+        }
       } catch (e) {
         console.warn("Invalid stream:", stream, e)
         return false

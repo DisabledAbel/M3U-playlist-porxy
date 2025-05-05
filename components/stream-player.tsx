@@ -52,6 +52,7 @@ export function StreamPlayer({
           primaryStreamUrl={primaryStreamUrl}
           backupStreams={backupStreams}
           imageDetection={imageDetection}
+          channelName={channelName}
         />
       </CardContent>
     </Card>

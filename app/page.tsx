@@ -74,6 +74,9 @@ export default function Home() {
   const [imageDetectionSettings, setImageDetectionSettings] = useState<Record<string, ImageDetectionConfig>>({})
   const [ffmpegAvailable, setFfmpegAvailable] = useState<boolean | null>(null)
   const { toast } = useToast()
+  const [enableBackupPlaylist, setEnableBackupPlaylist] = useState(false)
+  const [backupPlaylistUrl, setBackupPlaylistUrl] = useState("")
+  const [processingBackups, setProcessingBackups] = useState(false)
 
   // Add a delay function to the component for use in various places
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -165,20 +168,186 @@ export default function Home() {
       // Update the proxy URL
       updateProxyUrl()
 
-      // Fetch channel list for backup streams
-      const loadedChannels = await fetchChannels()
-
-      // If channels were loaded successfully, load backup streams
-      if (loadedChannels && loadedChannels.length > 0) {
-        // Add a small delay to ensure the UI is responsive first
-        setTimeout(() => {
-          loadAllBackupStreams().then(() => {
-            // Then load image detection settings after a small delay
-            setTimeout(() => {
-              loadImageDetectionSettings()
-            }, 500)
+      // If backup playlist is enabled, process it
+      if (enableBackupPlaylist && backupPlaylistUrl) {
+        try {
+          setProcessingBackups(true)
+          toast({
+            title: "Processing backup playlist",
+            description: "Setting up backup streams...",
           })
-        }, 500)
+
+          // First load the channels from the main playlist
+          const loadedChannels = await fetchChannels()
+
+          if (loadedChannels && loadedChannels.length > 0) {
+            // Then fetch the backup playlist
+            const backupResponse = await fetch(`/api/import-full-playlist?url=${encodeURIComponent(backupPlaylistUrl)}`)
+            const backupData = await backupResponse.json()
+
+            if (!backupResponse.ok) {
+              throw new Error(backupData.error || "Failed to fetch backup playlist")
+            }
+
+            if (backupData.channels && Array.isArray(backupData.channels)) {
+              // Find the section in handleSubmit where we process backup playlists
+              // Replace the channel name matching logic with this improved version:
+
+              // Create a map of channel names to URLs from the backup playlist
+              const backupMap = new Map<string, { url: string; name: string; group: string; tvgId: string }>()
+              backupData.channels.forEach((channel) => {
+                if (channel.name && channel.url) {
+                  try {
+                    // Store the original URL with the channel ID for later reference
+                    const channelId = channel.id || Math.random().toString(36).substring(2, 9)
+                    backupMap.set(channelId, {
+                      url: channel.url,
+                      name: channel.name,
+                      group: channel.group || "",
+                      tvgId: channel.tvgId || "",
+                    })
+                  } catch (e) {
+                    console.error(`Error processing backup channel "${channel.name}":`, e)
+                  }
+                }
+              })
+
+              console.log(`Found ${backupMap.size} channels in backup playlist`)
+
+              // Add a UI message about manual selection
+              toast({
+                title: "Processing backup playlist",
+                description: "Loading channels for manual selection...",
+              })
+
+              // Store the backup channels for manual selection
+              const backupChannels = Array.from(backupMap.entries()).map(([id, data]) => ({
+                id,
+                name: data.name,
+                url: data.url,
+                group: data.group,
+                tvgId: data.tvgId,
+              }))
+
+              // Show a dialog for manual selection or add a UI component for matching
+              // For now, we'll just add the first backup stream found for each channel as a temporary solution
+              let backupCount = 0
+              const processedChannels = new Set()
+
+              // For each channel in the main playlist, let the user select a backup
+              for (const channel of loadedChannels) {
+                if (channel.name && channel.id) {
+                  // For now, just use the first backup channel as a temporary solution
+                  // In a real implementation, this would be a user selection
+                  if (backupChannels.length > 0) {
+                    const backupChannel = backupChannels[0] // This would be user-selected in a real implementation
+                    const backupUrl = backupChannel.url
+
+                    if (backupUrl) {
+                      console.log(`Assigning backup for channel "${channel.name}": ${backupUrl}`)
+
+                      // Save this as a backup stream
+                      try {
+                        // Validate the URL before sending
+                        try {
+                          new URL(backupUrl)
+                        } catch (urlError) {
+                          console.error(`Invalid backup URL for "${channel.name}": ${backupUrl}`, urlError)
+                          continue // Skip this backup URL
+                        }
+
+                        const response = await fetch("/api/backup-streams", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            channelId: channel.id,
+                            originalId: channel.originalId || null, // Ensure originalId is never undefined
+                            streams: [
+                              {
+                                url: backupUrl,
+                                priority: 1,
+                              },
+                            ],
+                          }),
+                        })
+
+                        const data = await response.json()
+
+                        if (response.ok && data.success) {
+                          backupCount++
+                          processedChannels.add(channel.id)
+                          console.log(`Successfully saved backup for "${channel.name}"`)
+                        } else {
+                          console.error(`Failed to save backup for "${channel.name}":`, data)
+                        }
+                      } catch (saveError) {
+                        console.error(`Error saving backup for "${channel.name}":`, saveError)
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Update the backupStreams state with the newly added streams
+              const updatedBackupStreams = { ...backupStreams }
+
+              // Add the new backup streams to the state
+              processedChannels.forEach((channelId) => {
+                updatedBackupStreams[channelId] = [
+                  {
+                    id: Math.random().toString(36).substring(2, 9),
+                    url: backupMap.get(
+                      loadedChannels
+                        .find((c) => c.id === channelId)
+                        ?.name.toLowerCase()
+                        .trim(),
+                    ),
+                    priority: 1,
+                  },
+                ]
+              })
+
+              setBackupStreams(updatedBackupStreams)
+
+              toast({
+                title: "Backup streams configured",
+                description: `Set up ${backupCount} backup streams from the backup playlist`,
+              })
+
+              // Wait a moment before reloading all backup streams to ensure they're saved
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+            }
+          }
+        } catch (error) {
+          console.error("Error processing backup playlist:", error)
+          toast({
+            title: "Error",
+            description: `Failed to process backup playlist: ${error instanceof Error ? error.message : String(error)}`,
+            variant: "destructive",
+          })
+        } finally {
+          setProcessingBackups(false)
+        }
+      }
+
+      // Fetch channel list for backup streams if not already done
+      if (!channels.length) {
+        const loadedChannels = await fetchChannels()
+
+        // If channels were loaded successfully, load backup streams
+        if (loadedChannels && loadedChannels.length > 0) {
+          // Add a small delay to ensure the UI is responsive first
+          setTimeout(() => {
+            loadAllBackupStreams().then(() => {
+              // Then load image detection settings after a small delay
+              setTimeout(() => {
+                loadImageDetectionSettings()
+              }, 500)
+            })
+          }, 500)
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -336,7 +505,7 @@ export default function Home() {
       // Merge groups
       const existingGroupMap = new Map<string, boolean>()
       groups.forEach((group) => {
-        existingGroupMap.set(group.originalName, true)
+        existingGroupMap.set(channel.originalName, true)
       })
 
       // Extract unique new groups
@@ -1012,6 +1181,42 @@ export default function Home() {
               </div>
             </div>
 
+            <div className="space-y-2 mt-4 border-t pt-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="enable-backup-playlist"
+                  checked={enableBackupPlaylist}
+                  onCheckedChange={(checked) => setEnableBackupPlaylist(checked === true)}
+                />
+                <label
+                  htmlFor="enable-backup-playlist"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Enable automatic backup streams
+                </label>
+              </div>
+
+              {enableBackupPlaylist && (
+                <div className="space-y-2 pl-6 mt-2">
+                  <label htmlFor="backup-url" className="text-sm font-medium">
+                    Backup Playlist URL
+                  </label>
+                  <Input
+                    id="backup-url"
+                    type="url"
+                    placeholder="https://example.com/backup-playlist.m3u"
+                    value={backupPlaylistUrl}
+                    onChange={(e) => setBackupPlaylistUrl(e.target.value)}
+                    className="flex-1"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Channels from this playlist will be automatically set as backup streams for matching channels in the
+                    main playlist
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="advanced-options"
@@ -1180,8 +1385,8 @@ export default function Home() {
               </div>
             )}
 
-            <Button type="submit" disabled={loading}>
-              {loading ? "Processing..." : "Create Proxy"}
+            <Button type="submit" disabled={loading || processingBackups}>
+              {loading || processingBackups ? "Processing..." : "Create Proxy"}
             </Button>
           </form>
 

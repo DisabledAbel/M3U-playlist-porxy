@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Update the processPlaylistSimple function to use a more reliable channel ID generation approach
+// Completely rewritten processPlaylistSimple function to properly handle backup streams
 function processPlaylistSimple(
   content: string,
   baseUrl: string,
@@ -153,28 +153,30 @@ function processPlaylistSimple(
   // Track stats for debugging
   let extinfs = 0
   let urls = 0
-  let currentExtInf = ""
   let channelCounter = 0 // Use a simple counter for channel IDs
 
   // Ensure the playlist starts with #EXTM3U if it doesn't already
   if (!lines.some((line) => line.trim().startsWith("#EXTM3U"))) {
     result.push("#EXTM3U")
+  } else {
+    // Keep the original #EXTM3U line with any attributes
+    const extM3ULine = lines.find((line) => line.trim().startsWith("#EXTM3U"))
+    if (extM3ULine) {
+      result.push(extM3ULine)
+    } else {
+      result.push("#EXTM3U")
+    }
   }
 
   // Process each line
+  let currentExtInf = ""
+  let currentChannelId = ""
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
 
-    // Skip empty lines
-    if (!line) continue
-
-    // Always include the EXTM3U header
-    if (line.startsWith("#EXTM3U")) {
-      if (!result.some((r) => r.startsWith("#EXTM3U"))) {
-        result.push(line)
-      }
-      continue
-    }
+    // Skip empty lines and the #EXTM3U line (already handled)
+    if (!line || line.startsWith("#EXTM3U")) continue
 
     // Handle EXTINF lines - store for the next URL line
     if (line.startsWith("#EXTINF")) {
@@ -194,7 +196,7 @@ function processPlaylistSimple(
     if (line.includes("://")) {
       urls++
       channelCounter++ // Increment channel counter for each URL
-      const currentChannelId = `channel_${channelCounter}` // Generate a simple numeric ID
+      currentChannelId = `channel_${channelCounter}` // Generate a simple numeric ID
 
       // Process the primary URL
       let processedUrl: string
@@ -212,7 +214,7 @@ function processPlaylistSimple(
       if (includeBackups) {
         console.log(`Looking for backup streams for channel ID: ${currentChannelId}`)
         const backupStreams = backupStreamsStore[currentChannelId] || []
-        console.log(`Found ${backupStreams.length} backup streams`)
+        console.log(`Found ${backupStreams.length} backup streams for ${currentChannelId}`)
 
         // Add image detection info if enabled
         const imageDetection = imageDetectionStore[currentChannelId]
@@ -222,22 +224,33 @@ function processPlaylistSimple(
           )
         }
 
-        for (const backup of backupStreams) {
-          // Add a comment to indicate this is a backup stream
-          result.push(`#EXT-X-MEDIA-SEQUENCE:${backup.priority}`) // This helps some players recognize the backup
-          result.push(`#EXTINF:-1,${extractChannelName(currentExtInf)} (Backup ${backup.priority})`)
+        // Add backup streams in the correct format
+        if (backupStreams.length > 0) {
+          const channelName = extractChannelName(currentExtInf)
 
-          // Process the backup URL the same way as the primary
-          let backupProcessedUrl: string
-          if (transcode) {
-            backupProcessedUrl = `${baseUrl}/api/transcode?url=${encodeURIComponent(backup.url)}&format=${format}&resolution=${resolution}&bitrate=${bitrate}`
-          } else if (direct) {
-            backupProcessedUrl = `${baseUrl}/api/direct-stream?url=${encodeURIComponent(backup.url)}`
-          } else {
-            backupProcessedUrl = `${baseUrl}/api/stream?url=${encodeURIComponent(backup.url)}`
+          // Add a comment to indicate these are backup streams
+          result.push(
+            `#EXTINF:-1 tvg-id="${currentChannelId}_backups" group-title="Backups",--- ${channelName} Backups ---`,
+          )
+
+          for (const backup of backupStreams) {
+            // Add a proper EXTINF line for each backup
+            result.push(
+              `#EXTINF:-1 tvg-id="${currentChannelId}_backup_${backup.priority}" tvg-name="${channelName} (Backup ${backup.priority})",${channelName} (Backup ${backup.priority})`,
+            )
+
+            // Process the backup URL the same way as the primary
+            let backupProcessedUrl: string
+            if (transcode) {
+              backupProcessedUrl = `${baseUrl}/api/transcode?url=${encodeURIComponent(backup.url)}&format=${format}&resolution=${resolution}&bitrate=${bitrate}`
+            } else if (direct) {
+              backupProcessedUrl = `${baseUrl}/api/direct-stream?url=${encodeURIComponent(backup.url)}`
+            } else {
+              backupProcessedUrl = `${baseUrl}/api/stream?url=${encodeURIComponent(backup.url)}`
+            }
+
+            result.push(backupProcessedUrl)
           }
-
-          result.push(backupProcessedUrl)
         }
       }
     } else {
@@ -257,5 +270,5 @@ function extractChannelName(extinf: string): string {
   if (commaIndex !== -1) {
     return extinf.substring(commaIndex + 1).trim()
   }
-  return ""
+  return "Unknown Channel"
 }
