@@ -90,20 +90,7 @@ If the application requires environment variables:
 ### 4️⃣ Continuous Deployment
 
 Whenever I push updates to your GitHub repository,
-**Vercel automatically redeploys** the app to reflect the latest changes.
-
----
-
-Your application is now live and fully deployed.
-
----
-
----
-
-✅ This version is clean, professional, and easy to follow.
-Would you like a **matching local installation guide** formatted like this as well (for consistency)? I can do that next!
-
-
+**Vercel automatically redeploys the update 
 
 
 
