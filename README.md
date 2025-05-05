@@ -24,7 +24,36 @@ A lightweight proxy server for streaming and modifying M3U playlists on the fly.
 ---
 
 # 📥 Installation
-[![Install App](https://img.shields.io/badge/Install--App-blue?style=for-the-badge&logo=github)](https://github.com/apps/m3u-playlist-proxy-bata-version/installations/new)
+🌍 Vercel Deployment Guide
+
+Follow these steps to deploy your own live version of this app on Vercel — for free!
+
+1️⃣ Fork or Clone the Repository
+First, get a copy of the project on your GitHub account:
+
+Option 1: Click the Fork button on this repo
+or
+Option 2: Clone it to your computer
+git clone https://github.com/DisabledAbel/M3U-playlist-porxy.git
+Then push it to your own GitHub repository.
+
+2️⃣ Deploy to Vercel
+Go to vercel.com/new
+Click “Import Git Repository”
+Select your copy of the repo
+Follow the prompts and click Deploy
+Vercel will automatically build and deploy your app ✨
+
+3️⃣ (Optional) Configure Environment Variables
+If the app needs any environment variables (like API keys):
+
+Go to your project’s Vercel Dashboard → Settings → Environment Variables
+Add the required variables
+Click “Redeploy” to apply them
+4️⃣ Automatic Updates
+Whenever you push new code to your GitHub repo,
+Vercel automatically updates your live site — no extra steps needed 🚀
+
 
 
 
